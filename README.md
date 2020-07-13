@@ -5,7 +5,6 @@
 - Measure and map the urban capital available by census tract within the city (with a focus on those tracts with the highest eviction rates)
 
 #### To-do
-- find the census tract eviction rate data
 - create dash board of urban capital metrics
 - find the correlation between eviction rate data and capital metrics
 
