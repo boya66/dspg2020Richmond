@@ -1,4 +1,4 @@
-#RICHMOND HOUSING
+#RICHMOND HOUSING ACS
 
 setwd("~/dspg2020Richmond")
 
@@ -9,16 +9,19 @@ library(ggplot2)
 library(olsrr)
 library(stats)
 library(psych)
+library(tigris)
+library(leaflet)
+library(sf)
 
 
 #show available variables in a particular ACS survey
-acs5<-load_variables(2009, "acs5", cache=T)
+acs5<-load_variables(2015, "acs5", cache=T)
 View(acs5)
 
 acs5_subject <- load_variables(2018, "acs5/subject", cache=T)
 View(acs5_subject)
 
-acs5_profile<- load_variables(2018, "acs5/profile", cache=T)
+acs5_profile<- load_variables(2015, "acs5/profile", cache=T)
 View(acs5_profile)
 
 #FUNCTIONS:
@@ -73,7 +76,6 @@ acs_years<-function(years,key,geography,...){
   return(acs_data)
 }
 
-
 #4. "acs_years_tables" uses two previously defined functions (acs_tables and acs_wide) to return multiple 
 # variable tables across multiple years in one single tibble.  A couple of notes: the way that 
 # get_acs handles variables before 2013 varies, so this function only works for 2013 and after.
@@ -98,7 +100,7 @@ acs_years_tables<-function(tables,years,key,geography,NAME_col_names,...){
 #NATIONAL DATA (CITIES FROM EVICTION LAB RANKING)
 
 tables<-c("S2501","S2502","S2503","S2506","S2507","B19013")
-years<-2018
+years<-c(2018)
 colnames=c("City","State")
 
 #Note: the following code, which I have commented out, pulls the the variable tables listed above
@@ -161,7 +163,7 @@ HousingReduced<-acs_housing_100%>%
   mutate(MedianMonthlyIncome=MedianIncomeYearly/12)
 
 
-#PLOTTING
+#PLOTTING NATIONAL DATA
 
 #Household Size
 data_long_size<-pivot_longer(HousingReduced,
@@ -198,12 +200,13 @@ p
 data_long_education<-pivot_longer(HousingReduced,
                              cols=c("Less_than_HS","HSdegree","Associate", "Bacc_or_greater"),
                              names_to="Education of Householder")
+data_long_education$`Education of Householder`<-as.factor(data_long_education$`Education of Householder`)
 
 highlightdf3<-data_long_education%>%
   filter(City=="Richmond city")
 highlightdf3$City<-rep("Richmond",times=nrow(highlightdf3))
 
-p<-ggplot(data=data_long_education,mapping=aes(x=as.factor(`Education of Householder`), y=value, fill=`Education of Householder`))
+p<-ggplot(data=data_long_education,mapping=aes(x=fct_inorder(`Education of Householder`), y=value, fill=`Education of Householder`))
 p<-p+geom_violin()
 p<-p+geom_point(data=highlightdf3)
 p<-p+labs(x="Highest Education Level",y="Percentage",title = "Education Level of Householder",subtitle="Cities with the 100 highest eviction rates (dot=Richmond)")
@@ -228,4 +231,62 @@ p<-p+theme(legend.position="none")
 p
 
 
+# RICHMOND-SPECIFIC MEDIAN HOUSING DATA
 
+tables<-("DP04")
+years<-c(2010:2014)
+colnames=c("Census_tract","City","State")
+
+acs_Richmond_housing2015<-acs_years_tables(geography = "tract",
+                                       county="Richmond city",
+                                       state="VA",
+                                       tables = tables,
+                                       key = .key,
+                                       year=years,
+                                       NAME_col_names = colnames)
+
+acs_Richmond_housing2015<-acs_Richmond_housing2015%>%
+  rename(Median_Home_Value=DP04_0088)%>%
+  select(year,GEOID,Median_Home_Value)
+
+tables<-("DP04")
+years<-c(2015:2018)
+colnames=c("Census_tract","City","State")
+
+acs_Richmond_housing2018<-acs_years_tables(geography = "tract",
+                                           county="Richmond city",
+                                           state="VA",
+                                           tables = tables,
+                                           key = .key,
+                                           year=years,
+                                           NAME_col_names = colnames)
+
+acs_Richmond_housing2018<-acs_Richmond_housing2018%>%
+  rename(Median_Home_Value=DP04_0089)%>%
+  select(year,GEOID,Median_Home_Value)
+
+acs_Richmond_housing<-rbind(acs_Richmond_housing2015,acs_Richmond_housing2018)
+
+#PLOTTING IN LEAFLET
+
+#Pulls geometry data from tigris, transforms geometry to the proper type for leaflet maps
+VAtracts<-tracts(state="51",cb=T,class="sf")
+VAcounties<-counties(state="51",cb=T,class="sf")%>%
+  filter(COUNTYFP%in%c('760'))
+VAcounties<-st_transform(VAcounties,crs="WGS84")
+Richmond_housing_geo<-inner_join(VAtracts,acs_Richmond_housing, by="GEOID")
+Richmond_housing_geo<-st_transform(Richmond_housing_geo,crs="WGS84")
+
+#set palette
+mypalette <- colorQuantile(palette="viridis", Richmond_housing_geo$Median_Home_Value[Richmond_housing_geo$year==2018],n=5)
+
+#construct map
+leaflet() %>%
+  addTiles() %>%
+  addPolygons(data=Richmond_housing_geo%>%filter(year==2018),color = ~mypalette(Richmond_housing_geo$Median_Home_Value[Richmond_housing_geo$year==2018]),
+             smoothFactor = 0.2, fillOpacity=0.6, weight = 1,stroke = F, label=paste("Tract: ",Richmond_housing_geo$NAME, ", Value: ",Richmond_housing_geo$Median_Home_Value))%>%
+  addLegend(pal=mypalette,position = "topright",values = Richmond_housing_geo$Median_Home_Value[Richmond_housing_geo$year==2018],
+            labFormat = function(type, cuts, p) {
+            n = length(cuts)
+            paste0(cuts[-n], " &ndash; ", cuts[-1])},opacity = 1) %>%
+  addPolylines(data = VAcounties, color = "black", opacity = 0.5, weight = 1)
