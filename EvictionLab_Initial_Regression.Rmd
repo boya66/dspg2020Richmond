@@ -1,0 +1,362 @@
+---
+title: "EvictionLab_Initial_Regression"
+author: "Dylan Glover"
+date: "July 14, 2020"
+output: pdf_document
+---
+
+#Install libraries, if previously uninstalled, otherwise load them
+```{r libraries, include=FALSE}
+check.package.install <- function(pkge){
+  is.element(pkge, installed.packages()[,1])
+}
+
+if (!check.package.install("tidyverse")){
+  install.packages("tidyverse")
+}
+
+if (!check.package.install("data.table")){
+  install.packages("data.table")
+}
+
+if (!check.package.install("sqldf")){
+  install.packages("sqldf")
+}
+
+library(tidyverse)
+library(data.table)
+library(sqldf)
+
+```
+
+#Run if not previously downloaded EvictionLab data
+#Download EvicitonLab data at tract, city levels for .csv and .geojson formats
+#Set destfold variable below to your desired working directory
+```{r download_files, include=FALSE}
+library(USAboundaries)
+state_codes
+
+st_abbr <- state_codes$state_abbr
+
+#Set your destination folder here
+destfold <- 'C:/Users/dnsgl/Desktop/DSPG/Richmond/ELab/'
+
+for (st in st_abbr) {
+    str <- paste0('http://eviction-lab-data-downloads.s3.amazonaws.com/',st,'/tracts.csv')
+    str_dest <- paste0(destfold,'tracts_',st,'.csv')
+   # print(str)
+   # print(str_dest)
+    download.file(url=str, destfile=str_dest, method="wininet", quiet=TRUE)
+}
+
+for (st in st_abbr) {
+    str <- paste0('http://eviction-lab-data-downloads.s3.amazonaws.com/',st,'/cities.csv')
+    str_dest <- paste0(destfold,'cities_',st,'.csv')
+   # print(str)
+   # print(str_dest)
+    download.file(url=str, destfile=str_dest, method="wininet", quiet=TRUE)
+}
+
+for (st in st_abbr) {
+    str <- paste0('http://eviction-lab-data-downloads.s3.amazonaws.com/',st,'/cities.geojson')
+    str_dest <- paste0(destfold,'cities_',st,'.geojson')
+   # print(str)
+   # print(str_dest)
+    download.file(url=str, destfile=str_dest, method="wininet", quiet=TRUE)
+}
+
+for (st in st_abbr) {
+    str <- paste0('http://eviction-lab-data-downloads.s3.amazonaws.com/',st,'/tracts.geojson')
+    str_dest <- paste0(destfold,'tracts_',st,'.geojson')
+   # print(str)
+   # print(str_dest)
+    download.file(url=str, destfile=str_dest, method="wininet", quiet=TRUE)
+}
+
+
+```
+#Upload downloaded files and combine into a dataframe: e_tracts
+```{r combine_files, include=FALSE}
+
+#tracts
+
+e_tract_candidates = list.files(destfold,pattern="(^tracts_).*(.csv)")
+
+setwd(destfold)
+
+for (tract in e_tract_candidates){
+       
+  # Create e_tracts, if nonexistent
+  if (!exists("e_tracts")){
+    e_tracts <- data.table::fread(tract, header=TRUE)
+  }
+   
+  # Append to e_tracts, if existent
+  if (exists("e_tracts")){
+    tmp_e_tracts <- data.table::fread(tract, header=TRUE)
+    e_tracts <- rbind(e_tracts, tmp_e_tracts)
+    rm(tmp_e_tracts)
+  }
+ 
+}
+
+
+#cities
+
+e_city_candidates = list.files(destfold,pattern="(^cities_).*(.csv)")
+
+setwd(destfold)
+
+for (city in e_city_candidates){
+       
+  # Create e_cities, if nonexistent
+  if (!exists("e_cities")){
+    e_cities <- data.table::fread(city, header=TRUE)
+  }
+   
+  # Append to e_cities, if existent
+  if (exists("e_cities")){
+    tmp_e_cities <- data.table::fread(city, header=TRUE)
+    e_cities <- rbind(e_cities, tmp_e_cities)
+    rm(tmp_e_cities)
+  }
+ 
+}
+
+```
+
+```{r check_data}
+
+library(RODBC)
+con <- odbcDriverConnect("driver=SQL Server; server=LAPTOP-68S1DUHP\\WOLVERINE_NASCEN;Database=Richmond")
+
+e_tracts$parentlocation <- e_tracts$`parent-location`
+e_cities$parentlocation <- e_cities$`parent-location`
+
+dt_tracts <- e_tracts[, names(e_tracts) := lapply(.SD, as.character)]
+dt_cities <- e_cities[, names(e_cities) := lapply(.SD, as.character)]
+sapply(dt_tracts, class)
+sapply(dt_cities, class)
+
+dt_tracts <- dt_tracts[,`parent-location`:=NULL]
+dt_cities <- dt_cities[,`parent-location`:=NULL]
+
+sqlSave(con, dt_tracts, tablename =
+    "dt_tracts",rownames=FALSE, append = TRUE)
+
+sqlSave(con, dt_cities, tablename =
+    "dt_cities",rownames=FALSE, append = TRUE)
+
+sqlSave(con, e_tracts, tablename =
+    "R_e_tracts1",rownames=FALSE, append = TRUE, varTypes = c(rep("nvarchar(100)", ncol(e_tracts))))
+
+sqlSave(con, e_cities, tablename =
+    "R_e_cities",rownames=FALSE, append = TRUE)
+
+```
+
+```{r get_acs}
+check.package.install <- function(pkge){
+  is.element(pkge, installed.packages()[,1])
+}
+
+if (!check.package.install("tidycensus")){
+  install.packages("tidycensus")
+}
+
+if (!check.package.install("tidyverse")){
+  install.packages("tidyverse")
+}
+
+if (!check.package.install("stringr")){
+  install.packages("stringr")
+}
+
+if (!check.package.install("ggplot2")){
+  install.packages("ggplot2")
+}
+
+if (!check.package.install("gridExtra")){
+  install.packages("gridExtra")
+}
+
+#Load Libraries
+
+library(tidycensus)
+library(tidyverse)
+library(stringr)
+
+# Candidate variable tables for describing employment, poverty, and educational attainment
+  # B23025 
+    #(001-007, 
+    #EMPLOYMENT STATUS FOR THE POPULATION 16 YEARS AND OVER, 
+    #Universe: EMPLOYMENT STATUS FOR THE POPULATION 16 YEARS AND OVER), 
+  # B17020 
+    #(001-009, 
+    #POVERTY STATUS IN THE PAST 12 MONTHS BY AGE, 
+    #Universe: Population For Whom Poverty Status Is Determined), 
+  # B17003 
+    #(001-012, 
+    #POVERTY STATUS IN THE PAST 12 MONTHS OF INDIVIDUALS BY SEX BY EDUCATIONAL ATTAINMENT, 
+    #Universe: Population 25 Years And Over For Whom Poverty Status Is Determined), 
+  # B15003 
+    #(001-025, 
+    #EDUCATIONAL ATTAINMENT FOR THE POPULATION 25 YEARS AND OVER, 
+    #Universe: Population 25 Years And Over), 
+
+# Create a vector of variables to pull
+
+vars<-c(
+  tot_emp_status_16yrs_and_over_B23025_= "B23025_001", 
+  emp_status_16yrs_and_over_labor_force_B23025_ = "B23025_002", 
+  emp_status_16yrs_and_over_civ_labor_force_B23025_ = "B23025_003",
+  emp_status_16yrs_and_over_employed_B23025_ = "B23025_004", 
+  emp_status_16yrs_and_over_unemployed_B23025_ = "B23025_005", 
+  emp_status_16yrs_and_over_armed_forces_B23025_ = "B23025_006", 
+  emp_status_16yrs_and_over_not_in_labor_force_B23025_ = "B23025_007", 
+  tot_pov_sts_12mths_age_B17020_ = "B17020_001", 
+  tot_income_12mths_blw_pov_lvl_B17020_ = "B17020_002",
+  income_12mths_blw_pov_lvl_under6yrs_B17020_ = "B17020_003", 
+  income_12mths_blw_pov_lvl_6to11yrs_B17020_ = "B17020_004",
+  income_12mths_blw_pov_lvl_12to17yrs_B17020_ = "B17020_005",
+  income_12mths_blw_pov_lvl_18to59yrs_B17020_ = "B17020_006",
+  income_12mths_blw_pov_lvl_60to74yrs_B17020_ = "B17020_007", 
+  income_12mths_blw_pov_lvl_75to84yrs_B17020_ = "B17020_008",
+  income_12mths_blw_pov_lvl_85upyrs_B17020_ = "B17020_009",
+  tot_pov_sts_indiv_sex_edu_B17003_ = "B17003_001", 
+  tot_income_blw_pov_pov_sts_indiv_sex_edu_B17003_ = "B17003_002", 
+  income_blw_pov_male_pov_sts_indiv_sex_edu_B17003_ = "B17003_003", 
+  income_blw_pov_male_no_hs_pov_sts_indiv_sex_edu_B17003_ = "B17003_004", 
+  income_blw_pov_male_hs_pov_sts_indiv_sex_edu_B17003_ = "B17003_005", 
+  income_blw_pov_male_assoc_pov_sts_indiv_sex_edu_B17003_ = "B17003_006", 
+  income_blw_pov_male_bach_pov_sts_indiv_sex_edu_B17003_ = "B17003_007",
+  income_blw_pov_female_pov_sts_indiv_sex_edu_B17003_ = "B17003_008", 
+  income_blw_pov_female_no_hs_pov_sts_indiv_sex_edu_B17003_ = "B17003_009", 
+  income_blw_pov_female_hs_pov_sts_indiv_sex_edu_B17003_ = "B17003_010", 
+  income_blw_pov_female_assoc_pov_sts_indiv_sex_edu_B17003_ = "B17003_011", 
+  income_blw_pov_female_bach_pov_sts_indiv_sex_edu_B17003_ = "B17003_012",
+  tot_edu_attain_25yrs_and_up_B15003_= "B15003_001", 
+  tot_edu_attain_25yrs_and_up_no_school_B15003_= "B15003_002", 
+  tot_edu_attain_25yrs_and_nursery_B15003_= "B15003_003", 
+  tot_edu_attain_25yrs_and_up_kindergarten_B15003_= "B15003_004", 
+  tot_edu_attain_25yrs_and_up_1stgrade_B15003_= "B15003_005", 
+  tot_edu_attain_25yrs_and_up_2ndgrade_B15003_= "B15003_006", 
+  tot_edu_attain_25yrs_and_up_3rdgrade_B15003_= "B15003_007", 
+  tot_edu_attain_25yrs_and_up_4thgrade_B15003_= "B15003_008", 
+  tot_edu_attain_25yrs_and_up_5thgrade_B15003_= "B15003_009", 
+  tot_edu_attain_25yrs_and_up_6thgrade_B15003_= "B15003_010",
+  tot_edu_attain_25yrs_and_up_7thgrade_B15003_= "B15003_011", 
+  tot_edu_attain_25yrs_and_up_8thgrade_B15003_= "B15003_012", 
+  tot_edu_attain_25yrs_and_up_9thgrade_B15003_= "B15003_013", 
+  tot_edu_attain_25yrs_and_up_10thgrade_B15003_= "B15003_014", 
+  tot_edu_attain_25yrs_and_up_11thgrade_B15003_= "B15003_015", 
+  tot_edu_attain_25yrs_and_up_12thgrade_B15003_ = "B15003_016", 
+  tot_edu_attain_25yrs_and_up_HS_diploma_B15003_ = "B15003_017", 
+  tot_edu_attain_25yrs_and_up_GED_B15003_ = "B15003_018", 
+  tot_edu_attain_25yrs_and_up_somecollege_freshman_B15003_ = "B15003_019", 
+  tot_edu_attain_25yrs_and_up_somecollege_abovefreshman_B15003_ = "B15003_020", 
+  tot_edu_attain_25yrs_and_up_assoc_B15003_= "B15003_021",
+  tot_edu_attain_25yrs_and_up_bach_B15003_= "B15003_022", 
+  tot_edu_attain_25yrs_and_up_masters_B15003_ = "B15003_023", 
+  tot_edu_attain_25yrs_and_up_prof_degree_B15003_ = "B15003_024", 
+  tot_edu_attain_25yrs_and_up_doctorate_B15003_ = "B15003_025"
+  )
+
+# "get_acs" creates a census api call using the vector of variables specified above
+
+#Apply for census api and set 'yourkey' string to your API key
+yourkey <- ''
+
+acs<-get_acs(geography = "tract",
+             state="VA",
+             county = "Richmond city",
+             variables = vars,
+             survey = "acs5",
+             key = yourkey,
+             output = "wide",
+             show_call = T,
+             geometry = T,
+             keep_geo_vars = T)
+
+#Separate the NAME column into Census_tract, County, and State
+colnames=c("Census_tract","County","State")
+acs<-separate(acs,NAME.y, into=colnames, sep = ", ")
+
+# Create measures based on ACS variables
+acs$perc_16yrs_and_over_in_labor_force <- 
+  round((acs$emp_status_16yrs_and_over_labor_force_B23025_E / acs$tot_emp_status_16yrs_and_over_B23025_E)*100,2)
+acs$perc_16yrs_and_over_unemployed <- 
+  round((acs$emp_status_16yrs_and_over_unemployed_B23025_E / acs$tot_emp_status_16yrs_and_over_B23025_E)*100,2)
+acs$perc_of_pov_sts_known_recent_annual_income_blw_pov_lvl <- 
+  round((acs$tot_income_12mths_blw_pov_lvl_B17020_E / acs$tot_pov_sts_12mths_age_B17020_E)*100,2)
+acs$percw_HS_diploma <-  
+  round((acs$tot_edu_attain_25yrs_and_up_HS_diploma_B15003_E / acs$tot_edu_attain_25yrs_and_up_B15003_E)*100,2)
+acs$per_below_HS_diploma <- 
+  round(((acs$tot_edu_attain_25yrs_and_up_B15003_E - 
+            (acs$tot_edu_attain_25yrs_and_up_assoc_B15003_E + 
+            acs$tot_edu_attain_25yrs_and_up_GED_B15003_E +
+            acs$tot_edu_attain_25yrs_and_up_somecollege_abovefreshman_B15003_E +
+            acs$tot_edu_attain_25yrs_and_up_somecollege_freshman_B15003_E +
+            acs$tot_edu_attain_25yrs_and_up_HS_diploma_B15003_E +
+            acs$tot_edu_attain_25yrs_and_up_bach_B15003_E + 
+            acs$tot_edu_attain_25yrs_and_up_masters_B15003_E + 
+            acs$tot_edu_attain_25yrs_and_up_doctorate_B15003_E))/ acs$tot_edu_attain_25yrs_and_up_B15003_E)*100,2)
+
+acs$per_bach_and_up <- 
+  round(((acs$tot_edu_attain_25yrs_and_up_bach_B15003_E + 
+            acs$tot_edu_attain_25yrs_and_up_masters_B15003_E + 
+            acs$tot_edu_attain_25yrs_and_up_doctorate_B15003_E)/acs$tot_pov_sts_12mths_age_B17020_E )*100,2)
+
+
+```
+
+#Earlier attempt, disregard below
+```{r read_identify_data, include=FALSE}
+
+
+
+
+#national dataset
+evictionlab <- data.table::fread("C:\\Users\\dnsgl\\Desktop\\DSPG\\Richmond\\Evictionlab_US_all.csv")
+#state dataset for validation of national dataset
+evictionlab_VA_only <- data.table::fread("C:\\Users\\dnsgl\\Desktop\\DSPG\\Richmond\\VA_all.csv") 
+
+str(evictionlab)
+str(evictionlab_VA_only)
+summary(evictionlab)
+summary(evictionlab_VA_only)
+
+#cities by "name" variable
+e_cities <- sqldf::sqldf("select * from evictionlab as e where e.name like ('%city')", method="raw")
+
+str(e_cities)
+summary(e_cities)
+
+#473 "cities"
+e_cities$name %>% as.data.frame() %>% distinct () %>% nrow()
+
+#validate previous method to identify cities by uploading Virginia data
+e_cities$name %>% as.data.frame() %>% distinct () %>% nrow()
+
+b <- sqldf::sqldf("Select length(GEOID) as GEOID_prof, * from evictionlab")
+evictionlab$length_GEOID <- nchar(as.character(evictionlab$GEOID))
+
+a <- sqldf::sqldf("select * from evictionlab where GEOID like ('51%')", method="raw")
+
+```
+
+```
+
+```{r profile_data, include=TRUE}
+str(evictionlab)
+summary(evictionlab)
+
+e_cities <- sqldf::sqldf("select * from evictionlab as e where e.name like ('%city')", method="raw")
+
+str(e_cities)
+summary(e_cities)
+
+#473 "cities"
+e_cities$name %>% as.data.frame() %>% distinct () %>% nrow()
+
+```
