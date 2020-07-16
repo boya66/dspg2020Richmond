@@ -107,9 +107,9 @@ colnames=c("City","State")
 #for all cities in the US.(For the variable names, see "acs_subject" above.)  It takes a long time to run -- around 30mins.  
 
 #acs_national_housing<-acs_tables(geography = "place",
-                             #tables = tables,
-                             #key = .key,
-                             #year=years)
+#tables = tables,
+#key = .key,
+#year=years)
 
 #This code includes all cities in the US
 acs_housing_wide<-acs_wide(acs_national_housing,colnames)
@@ -125,7 +125,7 @@ cities<-c("4550875","5167000","5135000","5156000","2836000","5157000","3728000",
           "2965000","3137000","1276600","1232000","4459000","3755000","1245060","0150000","1271000","4801000",
           "4260000","3240000","4052500","1224000","1759000","2250115","4752006","4224000","1912000","4009050",
           "1921000","3231900","0883835","0843000","2646000","4829000","1253000","1270600","1263000","1238250"
-          )
+)
 
 #Restrict data to the 100 cities listed above
 acs_housing_100<-acs_housing_wide%>%
@@ -156,7 +156,7 @@ acs_housing_100<-acs_housing_100%>%
   mutate(HousingCostProportion=(S2503_C01_024)/((S2503_C01_013)/12))%>%
   mutate(MedianMortgage=S2506_C01_039)%>%
   mutate(MedianRealEstateTaxes=S2506_C01_065)
-  
+
 #Reduce table to just those variables used for plotting
 HousingReduced<-acs_housing_100%>%
   select(1:3,917:935)%>%
@@ -167,8 +167,8 @@ HousingReduced<-acs_housing_100%>%
 
 #Household Size
 data_long_size<-pivot_longer(HousingReduced,
-                        cols=c("1","2","3", "4+"),
-                        names_to="People in Household")
+                             cols=c("1","2","3", "4+"),
+                             names_to="People in Household")
 highlightdf<-data_long_size%>%
   filter(City=="Richmond city")
 highlightdf$City<-rep("Richmond",times=nrow(highlightdf))
@@ -182,8 +182,8 @@ p
 
 #Race
 data_long_race<-pivot_longer(HousingReduced,
-                        cols=c("White","AfAm","Hispanic"),
-                        names_to="Race of Householder")
+                             cols=c("White","AfAm","Hispanic"),
+                             names_to="Race of Householder")
 
 highlightdf2<-data_long_race%>%
   filter(City=="Richmond city")
@@ -198,8 +198,8 @@ p
 
 #Education
 data_long_education<-pivot_longer(HousingReduced,
-                             cols=c("Less_than_HS","HSdegree","Associate", "Bacc_or_greater"),
-                             names_to="Education of Householder")
+                                  cols=c("Less_than_HS","HSdegree","Associate", "Bacc_or_greater"),
+                                  names_to="Education of Householder")
 data_long_education$`Education of Householder`<-as.factor(data_long_education$`Education of Householder`)
 
 highlightdf3<-data_long_education%>%
@@ -216,8 +216,8 @@ p
 
 #Housing Cost as a Proportion of Income
 data_long_income<-pivot_longer(HousingReduced,
-                                  cols=c("HousingCostProportion"),
-                                  names_to="Housing Cost")
+                               cols=c("HousingCostProportion"),
+                               names_to="Housing Cost")
 
 highlightdf4<-data_long_income%>%
   filter(City=="Richmond city")
@@ -238,12 +238,12 @@ years<-c(2010:2014)
 colnames=c("Census_tract","City","State")
 
 acs_Richmond_housing2015<-acs_years_tables(geography = "tract",
-                                       county="Richmond city",
-                                       state="VA",
-                                       tables = tables,
-                                       key = .key,
-                                       year=years,
-                                       NAME_col_names = colnames)
+                                           county="Richmond city",
+                                           state="VA",
+                                           tables = tables,
+                                           key = .key,
+                                           year=years,
+                                           NAME_col_names = colnames)
 
 acs_Richmond_housing2015<-acs_Richmond_housing2015%>%
   rename(Median_Home_Value=DP04_0088)%>%
@@ -284,9 +284,9 @@ mypalette <- colorQuantile(palette="viridis", Richmond_housing_geo$Median_Home_V
 leaflet() %>%
   addTiles() %>%
   addPolygons(data=Richmond_housing_geo%>%filter(year==2018),color = ~mypalette(Richmond_housing_geo$Median_Home_Value[Richmond_housing_geo$year==2018]),
-             smoothFactor = 0.2, fillOpacity=0.6, weight = 1,stroke = F, label=paste("Tract: ",Richmond_housing_geo$NAME, ", Value: ",Richmond_housing_geo$Median_Home_Value))%>%
+              smoothFactor = 0.2, fillOpacity=0.6, weight = 1,stroke = F, label=paste("Tract: ",Richmond_housing_geo$NAME, ", Value: ",Richmond_housing_geo$Median_Home_Value))%>%
   addLegend(pal=mypalette,position = "topright",values = Richmond_housing_geo$Median_Home_Value[Richmond_housing_geo$year==2018],
             labFormat = function(type, cuts, p) {
-            n = length(cuts)
-            paste0(cuts[-n], " &ndash; ", cuts[-1])},opacity = 1) %>%
+              n = length(cuts)
+              paste0(cuts[-n], " &ndash; ", cuts[-1])},opacity = 1) %>%
   addPolylines(data = VAcounties, color = "black", opacity = 0.5, weight = 1)
