@@ -1,0 +1,45 @@
+---
+title: "EvictionLab_Initial_Regression"
+author: "Dylan Glover"
+date: "July 27, 2020"
+output: pdf_document
+---
+
+```{r, setup, include=FALSE}
+#knitr::opts_knit$set(root.dir = 'C:/Users/dnsgl/Desktop/DSPG/Richmond/ELab/')
+
+#load("EvictionLab_ACS_Data.RData")
+EvictionLab_ACS_Data <- data.table::fread('EvictionLab_ACS_Data.csv')
+
+```
+
+```{r create_model, include=TRUE}
+
+set.seed(123)
+
+#install.packages("splitstackshape")
+library(splitstackshape)
+
+#Create factor variables for regression analysis below
+EvictionLab_ACS_Data$ttp_Statecode <- as.factor(EvictionLab_ACS_Data$ttp_Statecode)
+EvictionLab_ACS_Data$ttp_Placecode <- as.factor(EvictionLab_ACS_Data$ttp_Placecode)
+EvictionLab_ACS_Data$ttp_CountyCode <- as.factor(EvictionLab_ACS_Data$ttp_CountyCode)
+EvictionLab_ACS_Data$COUSUB <- as.factor(EvictionLab_ACS_Data$COUSUB)
+EvictionLab_ACS_Data$tract_name <- as.factor(EvictionLab_ACS_Data$tract_name)
+
+#stratified sampling by state
+evict_sample <- stratified(EvictionLab_ACS_Data %>% filter(city_population >= 100000), c("ttp_Statecode"), 50)
+
+mod1 <- lm(data=evict_sample, evictionrate ~ povertyrate + 
+                        medianpropertyvalue
+                      + pctrenteroccupied + pcthispanic + pctasian + pctother + pctafam + 
+                      pctnhpi + pctmultiple + 
+                      FHP_ExcemptHousing_TOTAL + SLT_EXEMPT_TOTAL 
+                      + SLT_TREMEDIES_TOTAL + SLT_SecurityDeposit + rentburden + 
+                      SLT_Retaliation + 
+                        SLT_LREMEDIES_TOTAL + ttp_Stateabbreviation + city  + perc_16yrs_and_over_unemployed + percw_HS_diploma + per_below_HS_diploma + per_bach_and_up)
+
+summary(mod1)
+
+```
+
