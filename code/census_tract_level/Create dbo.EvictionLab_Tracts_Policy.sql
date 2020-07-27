@@ -266,7 +266,7 @@ left join policy as p
 on cleaned.ttp_Stateabbreviation = p.stusps
 --order by c.ttp_Stateabbreviation, ttp_Tract
 
-left join dbo.Fair_Housing_Data as f
+left join dbo.DT_Fair_Housing_Data as f
 on f.Jurisdictions = p.Jurisdiction
 
 left join citypop as c
@@ -280,5 +280,5 @@ and a.PLACE is null
 )
 
 select * 
-into  dbo.EvictionLab_Tracts_Policy 
+into dbo.EvictionLab_Tracts_Policy 
 from secondcleaned as s

@@ -165,6 +165,12 @@ con <- odbcDriverConnect("driver=SQL Server; server=LAPTOP-68S1DUHP\\WOLVERINE_N
 e_tracts$parentlocation <- e_tracts$`parent-location`
 e_cities$parentlocation <- e_cities$`parent-location`
 
+tracts_to_places <- data.table::fread('C:/Users/dnsgl/Desktop/DSPG/Richmond/tracts_to_places_geocorr2018.csv')
+
+LT_policy <- readxl::read_excel('C:/Users/dnsgl/Desktop/DSPG/Richmond/Landlord_Tenant_Data_Policy_atlas.xlsx', sheet=1)
+
+Fair_Housing_Data <- readxl::read_excel('C:/Users/dnsgl/Desktop/DSPG/Richmond/Fair_Housing_Data.xlsx', sheet=1)
+
 dt_tracts <- e_tracts[, names(e_tracts) := lapply(.SD, as.character)]
 dt_cities <- e_cities[, names(e_cities) := lapply(.SD, as.character)]
 dt_tracts_to_places <- tracts_to_places[, names(tracts_to_places) := lapply(.SD, as.character)]
@@ -176,32 +182,40 @@ dt_tracts <- dt_tracts[,`parent-location`:=NULL]
 dt_cities <- dt_cities[,`parent-location`:=NULL]
 
 sqlSave(con, dt_tracts, tablename =
-    "dt_tracts",rownames=FALSE, append = TRUE)
+    "dt_tracts",rownames=FALSE, append = TRUE, fast=F)
 
 sqlSave(con, dt_cities, tablename =
-    "dt_cities",rownames=FALSE, append = TRUE)
+    "dt_cities",rownames=FALSE, append = TRUE, fast=F)
 
 sqlSave(con, dt_tracts_to_places, tablename =
-    "dt_tracts_to_places",rownames=FALSE, append = TRUE)
+    "dt_tracts_to_places",rownames=FALSE, append = TRUE, fast=F)
 
 sqlSave(con, e_tracts, tablename =
-    "R_e_tracts1",rownames=FALSE, append = TRUE, varTypes = c(rep("nvarchar(100)", ncol(e_tracts))))
+    "R_e_tracts1",rownames=FALSE, append = TRUE, varTypes = c(rep("nvarchar(100)", ncol(e_tracts))), fast=F)
 
 sqlSave(con, e_cities, tablename =
-    "R_e_cities",rownames=FALSE, append = TRUE)
+    "R_e_cities",rownames=FALSE, append = TRUE, fast=F)
 
 sqlSave(con, LT_policy, tablename =
     "LT_policy",rownames=FALSE, append = TRUE, fast=F)
 
 sqlSave(con, abb, tablename =
-    "state_meta",rownames=FALSE, append = TRUE)
+    "state_meta",rownames=FALSE, append = TRUE, fast=F)
 
-tracts_to_places <- data.table::fread('C:/Users/dnsgl/Desktop/DSPG/Richmond/tracts_to_places_geocorr2018.csv')
-LT_policy <- readxl::read_excel('C:/Users/dnsgl/Desktop/DSPG/Richmond/Landlord_Tenant_Data_Policy_atlas.xlsx', sheet=1)
-Fair_Housing_Data <- readxl::read_excel('C:/Users/dnsgl/Desktop/DSPG/Richmond/Fair_Housing_Data.xlsx', sheet=1)
 DT_LT_policy <- LT_policy %>% group_by(Jurisdiction) %>% top_n(1, Valid_Through_Date)
+DT_Fair_Housing_Data <- Fair_Housing_Data %>% group_by(Jurisdictions) %>% top_n(1, Valid_Through_Date)
+
 abb <- us_states()
 abb <- as.data.frame(abb)
+
+sqlSave(con, DT_LT_policy, tablename =
+    "DT_LT_policy",rownames=FALSE, append = TRUE, fast=F)
+
+sqlSave(con, DT_Fair_Housing_Data, tablename =
+    "DT_Fair_Housing_Data",rownames=FALSE, append = TRUE, fast=F)
+
+
+EvictionLab_Tracts_Policy <- sqlQuery(con, 'select * from dbo.EvictionLab_Tracts_Policy')
 
 ```
 
@@ -373,6 +387,20 @@ acs$per_bach_and_up <-
   round(((acs$tot_edu_attain_25yrs_and_up_bach_B15003_E + 
             acs$tot_edu_attain_25yrs_and_up_masters_B15003_E + 
             acs$tot_edu_attain_25yrs_and_up_doctorate_B15003_E)/acs$tot_pov_sts_12mths_age_B17020_E )*100,2)
+
+
+```
+
+```{r create_final_data_source}
+EvictionLab_Tracts_Policy$GEOID <- as.character(EvictionLab_Tracts_Policy$GEOID)
+
+EvictionLab_ACS_Data <- dplyr::left_join(EvictionLab_Tracts_Policy, acs, by='GEOID', suffix = c('e','acs'))
+
+EvictionLab_ACS_Data <- EvictionLab_ACS_Data %>% as.data.table()
+
+EvictionLab_ACS_Data <- EvictionLab_ACS_Data[, names(EvictionLab_ACS_Data) := lapply(.SD, as.character)]
+
+data.table::fwrite(EvictionLab_ACS_Data, 'C:/Users/dnsgl/Desktop/DSPG/Richmond/github/EvictionLab_ACS_Data.csv', sep=',')
 
 
 ```
