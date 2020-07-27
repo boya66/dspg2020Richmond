@@ -11,6 +11,8 @@ output: pdf_document
 #load("EvictionLab_ACS_Data.RData")
 EvictionLab_ACS_Data <- data.table::fread('EvictionLab_ACS_Data.csv')
 
+EvictionLab_ACS_Data <- data.table::fread('C:/Users/dnsgl/Desktop/DSPG/Richmond/github/EvictionLab_ACS_Data.csv')
+
 ```
 
 ```{r create_model, include=TRUE}
