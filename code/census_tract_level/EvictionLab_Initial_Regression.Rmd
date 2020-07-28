@@ -41,7 +41,110 @@ mod1 <- lm(data=evict_sample, evictionrate ~ povertyrate +
                       SLT_Retaliation + 
                         SLT_LREMEDIES_TOTAL + ttp_Stateabbreviation + city  + perc_16yrs_and_over_unemployed + percw_HS_diploma + per_below_HS_diploma + per_bach_and_up)
 
+#evictionrate ~ povertyrate + 
+#                        medianpropertyvalue
+ #                     + pctrenteroccupied + 
+ #                     FHP_ExcemptHousing_TOTAL + SLT_EXEMPT_TOTAL 
+ #                     + SLT_TREMEDIES_TOTAL + SLT_SecurityDeposit + rentburden + 
+ #                       SLT_LREMEDIES_TOTAL + perc_16yrs_and_over_unemployed + #percw_HS_diploma + per_below_HS_diploma + per_bach_and_up
+
+mod2 <- lm(data=evict_sample, evictionrate ~ povertyrate + 
+                        medianpropertyvalue
+                      + pctrenteroccupied + pcthispanic + pctasian + pctother + pctafam + 
+                      pctnhpi + pctmultiple + 
+                      FHP_ExcemptHousing_TOTAL + SLT_EXEMPT_TOTAL 
+                      + SLT_TREMEDIES_TOTAL + SLT_SecurityDeposit + rentburden + 
+                      SLT_Retaliation + 
+                        SLT_LREMEDIES_TOTAL + perc_16yrs_and_over_unemployed + percw_HS_diploma + per_below_HS_diploma + per_bach_and_up)
+
+mod3 <- lm(data=evict_sample, evictionrate ~ povertyrate + 
+                        medianpropertyvalue
+                      + pctrenteroccupied + pcthispanic + pctasian + pctother + pctafam + 
+                      pctnhpi + pctmultiple + 
+                      FHP_ExcemptHousing_TOTAL + SLT_EXEMPT_TOTAL 
+                      + SLT_TREMEDIES_TOTAL + SLT_SecurityDeposit + rentburden + 
+                      SLT_Retaliation + 
+                        SLT_LREMEDIES_TOTAL + perc_16yrs_and_over_unemployed + percw_HS_diploma + per_below_HS_diploma + ttp_Stateabbreviation + city)
+
+vif_mod2 <- car::vif(mod2) %>% as.data.frame()
+colnames(vif_mod2) <- "VIF"
+
+#evictionrate ~ 
+ #                    
+                        ttp_Stateabbreviation + city  + #perc_16yrs_and_over_unemployed + percw_HS_diploma + per_below_HS_diploma + per_bach_and_up
+
+
+
 summary(mod1)
+
+#stepwise regression
+
+
+```
+
+```{r plot}
+```{r check_data_multicol, fig.height=9, fig.width=10, fig.align="center"}
+
+es <- evict_sample[,c(13:32,37:42, 211:214)]
+numericY <- unlist(lapply(es, is.numeric)) 
+
+numerictrain <- es[,..numericY]
+#initial multicollinearity plot
+sj_cor = cor(numerictrain, method=c("pearson"), use="complete.obs")
+
+#sj_cor = cor(raw_sj_train[,-c(1,3:13,15,16,19,21,24,25,26,34,28)], method=c("pearson"), use="complete.obs")
+
+#corrplot(sj_cor, addCoef.col = "black")
+ sj_cor[abs(sj_cor) > 0.6]
+colnames(sj_cor) <- c(1:ncol(sj_cor))
+rownames(sj_cor) <- c(1:nrow(sj_cor))
+
+library(reshape2)
+subset(melt(sj_cor), value > .60 & value < 1)
+
+
+#Create datasets and apply transformations
+raw_sj_train2 <- raw_sj_train[,-c(3,4,6:13,15,16,19,21,24,25,26,34,28)]
+
+#Check missing data
+raw_sj_train2[which(! complete.cases(raw_sj_train2)),]
+#Assume missing at random without other information available/methods to 
+#handle missing not at random
+
+raw_sj_train3 <- raw_sj_train2[-which(! complete.cases(raw_sj_train2)),]
+
+#final multicollinearity plot
+sj_cor2 = cor(raw_sj_train[,-c(1,3:13,15,16,19,21,24,25,26,34,28)], method=c("pearson"), use="complete.obs")
+corrplot(sj_cor2, addCoef.col = "black")
+
+
+
+formula <- as.formula(evictionrate ~ povertyrate + 
+                        medianpropertyvalue +
+                       pctrenteroccupied + pcthispanic + pctasian + pctother + pctafam + 
+                      pctnhpi + pctmultiple + 
+                      FHP_ExcemptHousing_TOTAL + SLT_EXEMPT_TOTAL +
+                      SLT_TREMEDIES_TOTAL + SLT_SecurityDeposit + rentburden + 
+                      SLT_Retaliation + 
+                        SLT_LREMEDIES_TOTAL + ttp_Stateabbreviation + city  + perc_16yrs_and_over_unemployed + percw_HS_diploma + per_below_HS_diploma + per_bach_and_up, data = evict_sample)
+fit <-lm(formula)
+
+#the linearly dependent variables
+ld.vars <- attributes(alias(fit)$Complete)$dimnames[[1]]
+
+#remove the linearly dependent variables variables
+formula.new <- as.formula(
+    paste(
+        paste(deparse(formula), collapse=""), 
+        paste(ld.vars, collapse="-"),
+        sep="-"
+    )
+)
+
+#run model again
+fit.new <-lm(formula.new)
+vif(fit.new)
+```
 
 ```
 

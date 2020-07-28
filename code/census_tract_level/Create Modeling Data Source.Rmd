@@ -215,6 +215,10 @@ sqlSave(con, DT_Fair_Housing_Data, tablename =
     "DT_Fair_Housing_Data",rownames=FALSE, append = TRUE, fast=F)
 
 
+sqlSave(con, acs, tablename =
+    "DT_acs",rownames=FALSE, append = TRUE, fast=F)
+
+
 EvictionLab_Tracts_Policy <- sqlQuery(con, 'select * from dbo.EvictionLab_Tracts_Policy')
 
 ```
@@ -360,6 +364,17 @@ acs <- rbind(acs, tidycensus::get_acs(geography = "tract",
 
       }
 
+
+acs1 <- tidycensus::get_acs(geography = "tract",
+                                      state="MT",
+                                      county = 'San Diego',
+                                      variables = vars,
+                                      survey = "acs5",
+                                      key = yourkey,
+                                      output = "wide",
+                                      geometry = T,
+                                      keep_geo_vars = T)
+
 #Separate the NAME column into Census_tract, County, and State
 colnames=c("Census_tract","County","State")
 acs<-separate(acs,NAME.y, into=colnames, sep = ", ")
@@ -386,7 +401,7 @@ acs$per_below_HS_diploma <-
 acs$per_bach_and_up <- 
   round(((acs$tot_edu_attain_25yrs_and_up_bach_B15003_E + 
             acs$tot_edu_attain_25yrs_and_up_masters_B15003_E + 
-            acs$tot_edu_attain_25yrs_and_up_doctorate_B15003_E)/acs$tot_pov_sts_12mths_age_B17020_E )*100,2)
+            acs$tot_edu_attain_25yrs_and_up_doctorate_B15003_E)/acs$tot_edu_attain_25yrs_and_up_B15003_E )*100,2)
 
 
 ```
@@ -402,6 +417,69 @@ EvictionLab_ACS_Data <- EvictionLab_ACS_Data[, names(EvictionLab_ACS_Data) := la
 
 data.table::fwrite(EvictionLab_ACS_Data, 'C:/Users/dnsgl/Desktop/DSPG/Richmond/github/EvictionLab_ACS_Data.csv', sep=',')
 
+acs2 <- acs
+acs2 <- as.data.table(acs2)
+names(acs2) := lapply(.SD, as.character)
+write.table(acs2, 'acs2.csv')
+
+
+acs4 <- read.table('C:/Users/dnsgl/Desktop/DSPG/Richmond/github/dspg2020Richmond/data/acs3.txt', sep=";")
+
+
+sqlSave(con, acs, tablename =
+    "DT_acs",rownames=FALSE, append = TRUE, fast=F)
+
+acs3 <- acs[,c(1:10,118:121)]
+acs3 <- as.data.frame(acs3)
+
+acs3 <- as.data.table(acs3)
+acs3 <- acs3[,c(1:14)]
+names(acs3) := lapply(.SD, as.character)
+sqlSave(con, acs3, tablename =
+    "DT_acs",rownames=FALSE, append = TRUE, fast=F)
+
+data.table::fwrite(acs3, 'C:/Users/dnsgl/Desktop/DSPG/Richmond/github/dspg2020Richmond/data/acs3.txt', sep="")
+
+write.table(acs3, 'C:/Users/dnsgl/Desktop/DSPG/Richmond/github/dspg2020Richmond/data/acs3.txt', sep=";")
+
+acs3 <- read.table('C:/Users/dnsgl/Desktop/DSPG/Richmond/github/dspg2020Richmond/data/acs3.txt', sep=";")
+
+acs3 <- acs[,c(1:6, 118:121)] %>% as.data.frame
+acs3 <- acs3[,c(1:10)]
+acs3 <- acs3[,c(1:10)]
+acs4 <- acs4[,c(1:3,5:6,11:14)]
+acs4 <- acs4[,c(1:4, 6:9)]
+acs4 <- acs4[,c(4:8)]
+
+acs4 <- do.call(data.frame,lapply(acs4, function(x) replace(x, is.infinite(x),NA)))
+
+acs3 <- do.call(data.frame,lapply(acs3, function(x) replace(x, is.infinite(x),NA)))
+
+sqlSave(con, acs4, tablename =
+    "acs4",rownames=FALSE, append = TRUE, fast=F)
+
+sqlSave(con, acs3, tablename =
+    "acs312",rownames=FALSE, append = TRUE, fast=F)
+
+sqlSave(con, acs5, tablename =
+    "acs5",rownames=FALSE, append = TRUE, fast=F)
+
+acs5 <- acs[,c(1:5,118:121)]
+acs5 <- as.data.frame(acs5)
+acs5 <- acs5[,c(1:9)]
+
+install.packages("Amelia")
+library(Amelia)
+
+
+EvictionLab_Tracts_Policy2 <- sqlQuery(con, 'select * from dbo.EvictionLab_Tracts_Policy3')
+
+EvictionLab_ACS_Data_backup <- EvictionLab_ACS_Data
+EvictionLab_ACS_Data <- EvictionLab_Tracts_Policy2
+
+E
+
+data.table::fwrite(EvictionLab_ACS_Data %>% as.data.table(), 'C:/Users/dnsgl/Desktop/DSPG/Richmond/github/dspg2020Richmond/data/EvictionLab_ACS_Data.csv')
 
 ```
 
