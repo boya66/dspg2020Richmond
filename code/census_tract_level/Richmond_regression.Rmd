@@ -1,0 +1,160 @@
+---
+title: "Richmond_regression"
+output: html_document
+fontsize: 10pt
+---
+# Data processing
+Only keep cities with population between 100000 and 300000 and remove rows with missing values.
+```{r, echo = FALSE}
+library(dplyr)
+EvictionLab_ACS_Data <- data.table::fread('../../data/EvictionLab_ACS_Data.csv')
+dat <- EvictionLab_ACS_Data %>% filter(city_population >= 100000) %>%
+  filter(city_population<=300000) %>% filter(!is.na(city)) %>% 
+  filter(!is.na(perc_16yrs_and_over_unemployed)) %>% 
+  filter(!is.na(medianhouseholdincome)) %>% filter(!is.na(evictionrate))
+```
+
+# Linear regression
+Fit a linear regression model with the all the potential correlated variables.
+
+`slt_exempt_total` is the number of total exemptions ( from state landlord-tenant law for dwellings, the higher the score, the more freedom landlords have). Possible exemptions are:
+
+- Hotel 
+- Renter holds a contract to purchase the dwelling 
+- Occupancy by a member of a social organization operated for the benefit of the organization 
+- Occupancy by an employee whose occupancy is conditional on employment 
+- Occupancy by an owner of a condominium  
+- Occupancy under a rental agreement for a dwelling used primarily for agriculture 
+- Public housing 
+
+
+`slt_tremedies_total` is the number of total remedies available to tenants: i.e. tenant can:
+ - Terminate lease
+ - Monetary damages
+ - Make repairs
+
+`slt_retaliation` is the presence of a law that  prohibits landlords from taking retaliatory actions against a tenant for asserting his or her rights under the law. If the law exists in the state, the score is 1, if it doesn't the score is 0. (Tenants will have more protection in states that have a law (score == 1))         
+ 
+`fhp_exempthousing_total` is the number of what is exempt from fair housing protections, the higher score the less protection tenants have (here are the options included in the variable):
+
+- HousingSelling/renting a limited number of housing units if the owner occupies one of the units
+
+- Renting rooms in the owner’s residence
+
+- Renting housing with shared common areas
+
+- Single-family housing sold or rented by an owner who owns a limited number of homes 
+
+- Housing operated by religious organizations or private clubs
+
+- Single-sex housing
+
+- Housing intended for elderly
+
+- Making housing unavailable to a renter/buyer if their presence would pose a direct threat to the safety of other tenants/persons on the property
+
+- Inquiring into whether the prospective purchaser/tenant is over the age of 18
+
+- Discriminating against a person who has been convicted for manufacturing or distributing illegal substances
+
+```{r, echo=FALSE}
+mod <- lm(evictionrate ~ medianhouseholdincome +  povertyrate + 
+            perc_16yrs_and_over_unemployed +  per_below_HS_diploma +
+            percw_HS_diploma +  per_bach_and_up +  pctafam + 
+            pctasian +  pcthispanic +  pctother +  SLT_EXEMPT_TOTAL +
+            SLT_TREMEDIES_TOTAL +  SLT_Retaliation +  
+           FHP_ExcemptHousing_TOTAL + SLT_LREMEDIES_TOTAL + city, data = dat)
+summary(mod)$coefficients[1:16,]
+```
+
+# Remove the factors that are not significant and obviously correlated with other existed variables:
+- only keep `per_bach_and_up` to show education level
+- drop `pctother`
+```{r}
+mod <- lm(evictionrate ~ medianhouseholdincome +  povertyrate + 
+            perc_16yrs_and_over_unemployed + per_bach_and_up +  pctafam + 
+            pctasian +  pcthispanic + SLT_EXEMPT_TOTAL +
+            SLT_TREMEDIES_TOTAL +  SLT_Retaliation +  
+           FHP_ExcemptHousing_TOTAL + SLT_LREMEDIES_TOTAL + city, data = dat)
+summary(mod)$coefficient[1:13,]
+```
+
+# Residual plot
+Remove three outliers.
+```{r}
+plot(mod$fitted, mod$residuals)
+dat <- dat[-order(mod$residuals, decreasing = T)[1:3],]
+dat <- dat[dat$evictionrate >0, ]
+```
+
+```{r, include=F, eval=F}
+# city and state_level policies are aliased, there are always city levels that are not estimable
+# dat$evictionrate[dat$evictionrate >0] <- runif(sum(dat$evictionrate <0.04))/1000
+mod <- lm(evictionrate ~ medianhouseholdincome +  povertyrate + 
+            perc_16yrs_and_over_unemployed + per_bach_and_up +  pctafam + 
+            pctasian +  pcthispanic + SLT_EXEMPT_TOTAL +
+            SLT_TREMEDIES_TOTAL +  SLT_Retaliation +  
+           FHP_ExcemptHousing_TOTAL + SLT_LREMEDIES_TOTAL + city, data = dat)
+# alias_city <- c('Shreveport city, LA','Stamford city, CT','Vancouver city, WA','Vista city, CA', 'Wilmington city, NC') 
+# dat1 <- dat[(dat$city %in% alias_city),]
+```
+
+# check colinearity
+drop `medianhouseholdincome` since its VIF is the highest. Now although VIFs of several variables are still greater than 2, it is much improved. This model doesn't include `city`, since `city` is aliased with the policy variables. VIF can be calculated after dropping `city`. 
+
+```{r}
+mod1 <- lm(evictionrate ~  medianhouseholdincome + povertyrate + 
+            perc_16yrs_and_over_unemployed + per_bach_and_up +  pctafam + 
+            pctasian +  pcthispanic + SLT_EXEMPT_TOTAL +
+            SLT_TREMEDIES_TOTAL +  SLT_Retaliation +  
+           FHP_ExcemptHousing_TOTAL + SLT_LREMEDIES_TOTAL, data = dat)
+car:: vif(mod1)
+mod1 <- lm(evictionrate ~ povertyrate + 
+            perc_16yrs_and_over_unemployed + per_bach_and_up +  pctafam + 
+            pctasian +  pcthispanic + SLT_EXEMPT_TOTAL +
+            SLT_TREMEDIES_TOTAL +  SLT_Retaliation +  
+           FHP_ExcemptHousing_TOTAL + SLT_LREMEDIES_TOTAL, data = dat)
+car:: vif(mod1)
+```
+#  square root transformation of the dependent variable
+Due to the previous residual plot, let's try some square root transformation of the response.
+```{r}
+mod <- lm(sqrt(evictionrate) ~ povertyrate + 
+            perc_16yrs_and_over_unemployed + per_bach_and_up +  pctafam + 
+            pctasian +  pcthispanic + SLT_EXEMPT_TOTAL +
+            SLT_TREMEDIES_TOTAL +  SLT_Retaliation +  
+           FHP_ExcemptHousing_TOTAL + SLT_LREMEDIES_TOTAL + city, data = dat)
+plot(mod, which = 1)
+# crPlots(mod)
+```
+
+## check the nonlinearity
+Also need to drop city first. I tried to do some transformation for `pctafam` and `slt_exempt_total`. The improvement is little, while variables become harder to interpret. I prefer what it is now. 
+```{r}
+library(car)
+mod1 <- lm(sqrt(evictionrate) ~ povertyrate + 
+            perc_16yrs_and_over_unemployed + per_bach_and_up +  pctafam + 
+            pctasian +  pcthispanic + SLT_EXEMPT_TOTAL +
+            SLT_TREMEDIES_TOTAL +  SLT_Retaliation +  
+           FHP_ExcemptHousing_TOTAL + SLT_LREMEDIES_TOTAL, data = dat)
+car::crPlots(mod1)
+```
+
+## final model
+```{r}
+mod <- lm(sqrt(evictionrate) ~ povertyrate + 
+            perc_16yrs_and_over_unemployed + per_bach_and_up +  pctafam + 
+            pctasian +  pcthispanic + SLT_EXEMPT_TOTAL +
+            SLT_TREMEDIES_TOTAL +  SLT_Retaliation +  
+           FHP_ExcemptHousing_TOTAL + SLT_LREMEDIES_TOTAL + city, data = dat)
+coef <- cbind(summary(mod)$coefficient[1:12,], significant_0.05 = summary(mod)$coefficient[1:12,4]<0.05)
+coef
+```
+
+```{r}
+anova(mod)
+write.csv(cbind(model.frame(mod), residual = mod$residuals), 'Richmond_final_regression_data.csv')
+```
+
+
+
