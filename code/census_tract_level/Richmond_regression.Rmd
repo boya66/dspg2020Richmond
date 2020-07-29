@@ -5,7 +5,7 @@ fontsize: 10pt
 ---
 # Data processing
 Only keep cities with population between 100000 and 300000 and remove rows with missing values.
-```{r, echo = FALSE}
+```{r, warnings = F, message=FALSE}
 library(dplyr)
 EvictionLab_ACS_Data <- data.table::fread('../../data/EvictionLab_ACS_Data.csv')
 dat <- EvictionLab_ACS_Data %>% filter(city_population >= 100000) %>%
@@ -80,10 +80,10 @@ summary(mod)$coefficient[1:13,]
 ```
 
 # Residual plot
-Remove three outliers.
+Remove three outliers. Keep third biggest outlier since it is from Richmond.
 ```{r}
 plot(mod$fitted, mod$residuals)
-dat <- dat[-order(mod$residuals, decreasing = T)[1:3],]
+dat <- dat[-order(mod$residuals, decreasing = T)[1:2],]
 dat <- dat[dat$evictionrate >0, ]
 ```
 
@@ -147,8 +147,8 @@ mod <- lm(sqrt(evictionrate) ~ povertyrate +
             pctasian +  pcthispanic + SLT_EXEMPT_TOTAL +
             SLT_TREMEDIES_TOTAL +  SLT_Retaliation +  
            FHP_ExcemptHousing_TOTAL + SLT_LREMEDIES_TOTAL + city, data = dat)
-coef <- cbind(summary(mod)$coefficient[1:12,], significant_0.05 = summary(mod)$coefficient[1:12,4]<0.05)
-coef
+# coef <- cbind(summary(mod)$coefficient[1:12,], significant_0.05 = summary(mod)$coefficient[1:12,4]<0.05)
+summary(mod)$coefficient[1:12,]
 ```
 
 ```{r}
